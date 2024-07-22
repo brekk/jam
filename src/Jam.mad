@@ -1,0 +1,87 @@
+import type { Error } from "IO"
+
+import File from "File"
+import { always } from "Function"
+import String from "String"
+import Wish from "Wish"
+
+
+
+// Preserve(dirty, file)
+export type Preserve = Preserve(Boolean, String)
+export alias Memory a = { get :: {} -> a, isDirty :: {} -> Boolean, set :: a -> a }
+
+// accessors
+
+isDirty :: Preserve -> Boolean
+export isDirty = where {
+  Preserve(d, _) =>
+    d
+}
+
+source :: Preserve -> String
+export source = where {
+  Preserve(_, f) =>
+    f
+}
+
+// constructors
+
+export create = Preserve(false)
+
+// methods
+
+save :: Preserve -> String -> Wish Error {}
+export save = (src, data) => where(src) {
+  Preserve(dirty, file) =>
+    dirty ? File.write(file, data) : Wish.good({})
+}
+
+forceSave :: Preserve -> String -> Wish Error {}
+export forceSave = (src, data) => where(src) {
+  Preserve(dirty, file) =>
+    pipe(
+      File.write(file),
+      map(always({})),
+    )(data)
+}
+
+load :: Preserve -> Wish Error String
+export load = where {
+  Preserve(_, file) =>
+    File.read(file)
+}
+
+flush :: Preserve -> String -> Wish Error {}
+export flush = (src, data) => where(src) {
+  Preserve(dirty, file) =>
+    if (dirty) {
+      pipe(
+        File.write(file),
+        map(always({})),
+      )(data)
+    } else {
+      Wish.good({})
+    }
+}
+
+remember :: Preserve -> String -> Wish Error (Memory String)
+export remember = (src, initialValue) => {
+  x = initialValue
+  changed = false
+  controller = {
+    get: () => x,
+    set: (y) => if (!changed) {
+      y
+    } else do {
+      x := y
+      changed := true
+      return y
+    },
+    isDirty: () => changed,
+  }
+  return pipe(
+    forceSave(src),
+    map(always(controller)),
+  )(x)
+}

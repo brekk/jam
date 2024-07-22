@@ -1,0 +1,27 @@
+import { noop } from "Function"
+import IO from "IO"
+import Wish from "Wish"
+
+import Jam from "@/Jam"
+
+
+
+main = () => {
+  jam = Jam.create("~/.jamfile-example")
+  IO.pTrace("JAM!", jam)
+
+  pipe(
+    Jam.remember($, "save data!"),
+    IO.pTrace("remembering..."),
+    Wish.fulfill(
+      pipe(
+        IO.pTrace("BAD"),
+        noop,
+      ),
+      pipe(
+        IO.pTrace("GOOD"),
+        noop,
+      ),
+    ),
+  )(jam)
+}
