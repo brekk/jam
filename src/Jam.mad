@@ -1,87 +1,185 @@
 import type { Error } from "IO"
 
 import File from "File"
-import { always } from "Function"
+import { always, complement, ifElse, when } from "Function"
+import {} from "Monad"
 import String from "String"
 import Wish from "Wish"
 
+import FS from "@/FS"
 
 
-// Preserve(dirty, file)
-export type Preserve = Preserve(Boolean, String)
-export alias Memory a = { get :: {} -> a, isDirty :: {} -> Boolean, set :: a -> a }
 
-// accessors
+// Preserve
+// - clean - has the value been written to source?
+// - sourceFile - where does the value get saved?
+// - value - the preserved value
+export type Preserve = Preserve(Boolean, String, String)
+export alias Memory = Wish Error Preserve
 
-isDirty :: Preserve -> Boolean
-export isDirty = where {
-  Preserve(d, _) =>
+
+//## ACCESSORS
+
+/**
+ * Has the value been saved?
+ * @since 0.0.1
+ */
+isClean :: Preserve -> Boolean
+export isClean = where {
+  Preserve(d, _, _) =>
     d
 }
 
+isDirty :: Preserve -> Boolean
+export isDirty = complement(isClean)
+
+/**
+ * Where is the value saved?
+ * @since 0.0.1
+ */
 source :: Preserve -> String
 export source = where {
-  Preserve(_, f) =>
+  Preserve(_, f, _) =>
     f
 }
 
-// constructors
-
-export create = Preserve(false)
-
-// methods
-
-save :: Preserve -> String -> Wish Error {}
-export save = (src, data) => where(src) {
-  Preserve(dirty, file) =>
-    dirty ? File.write(file, data) : Wish.good({})
+/**
+ * What is the saved value?
+ * @since 0.0.1
+ */
+value :: Preserve -> String
+export value = where {
+  Preserve(_, _, v) =>
+    v
 }
 
-forceSave :: Preserve -> String -> Wish Error {}
-export forceSave = (src, data) => where(src) {
-  Preserve(dirty, file) =>
-    pipe(
-      File.write(file),
-      map(always({})),
-    )(data)
+//## CONSTRUCTORS
+
+/**
+ * Create a Preserved value in memory
+ * @since 0.0.1
+ */
+export create = (file, v) => pipe(
+  FS.normalize,
+  Preserve(true, $, v),
+)(file)
+
+/**
+ * Load a Preserved value from source
+ * @since 0.0.1
+ */
+load :: String -> Memory
+export load = (file) => pipe(
+  FS.normalize,
+  File.read,
+  map(Preserve(true, file)),
+)(file)
+
+//## METHODS
+
+/**
+ * Set the preserved value and set clean to false
+ */
+set :: String -> Preserve -> Preserve
+export set = (x, p) => where(p) {
+  Preserve(d, s, _) =>
+    Preserve(false, s, x)
 }
 
-load :: Preserve -> Wish Error String
-export load = where {
-  Preserve(_, file) =>
-    File.read(file)
+/**
+ * Transform the preserved value and set clean to false
+ * @since 0.0.1
+ */
+update :: (String -> String) -> Preserve -> Preserve
+export update = (fn, p) => where(p) {
+  Preserve(d, s, v) =>
+    Preserve(false, s, fn(v))
 }
 
-flush :: Preserve -> String -> Wish Error {}
-export flush = (src, data) => where(src) {
-  Preserve(dirty, file) =>
-    if (dirty) {
+/**
+ * Set dirtiness
+ * @since 0.0.1
+ */
+setClean :: Preserve -> Preserve
+export setClean = where {
+  Preserve(_, s, v) =>
+    Preserve(true, s, v)
+}
+
+/**
+ * Set cleanliness
+ * @since 0.0.1
+ */
+setDirty :: Preserve -> Preserve
+export setDirty = where {
+  Preserve(_, s, v) =>
+    Preserve(false, s, v)
+}
+
+isEmpty :: Preserve -> Boolean
+export isEmpty = where {
+  Preserve(_, _, v) =>
+    v == ""
+}
+
+/**
+ * Save the file to source only if it is dirty
+ * @since 0.0.1
+ */
+save :: Preserve -> Memory
+export save = (pres) => ifElse(
+  isDirty,
+  pipe(
+    setClean,
+    flush,
+  ),
+  Wish.good,
+)(pres)
+
+/**
+ * Mount the preserved value from source (or write a default value if no value is present)
+ * @since 0.0.1
+ */
+ensure :: String -> String -> Memory
+export ensure = (src, defaultValue) => pipe(
+  load,
+  chain(
+    (loaded) => if (isEmpty(loaded)) {
       pipe(
-        File.write(file),
-        map(always({})),
-      )(data)
+        set(defaultValue),
+        flush,
+      )(loaded)
     } else {
-      Wish.good({})
-    }
+      Wish.good(loaded)
+    },
+  ),
+)(src)
+
+/**
+ * Write the value to source and set clean to true
+ * @since 0.0.1
+ */
+flush :: Preserve -> Memory
+export flush = (pres) => {
+  v = value(pres)
+  f = source(pres)
+  return pipe(
+    File.write(f),
+    map(always(Preserve(true, f, v))),
+  )(v)
 }
 
-remember :: Preserve -> String -> Wish Error (Memory String)
-export remember = (src, initialValue) => {
-  x = initialValue
-  changed = false
-  controller = {
-    get: () => x,
-    set: (y) => if (!changed) {
-      y
-    } else do {
-      x := y
-      changed := true
-      return y
-    },
-    isDirty: () => changed,
-  }
+/**
+ * Write the value to a temp file and set clean to true
+ * @since 0.0.1
+ */
+backup :: Preserve -> Memory
+export backup = (pres) => {
+  v = value(pres)
+  raw = source(pres)
+  tmp = FS.tempdir(raw)
   return pipe(
-    forceSave(src),
-    map(always(controller)),
-  )(x)
+    File.write(tmp),
+    map(always(Preserve(true, raw, v))),
+  )(v)
 }

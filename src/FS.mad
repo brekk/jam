@@ -1,0 +1,21 @@
+import Dict from "Dictionary"
+import { fromMaybe } from "Maybe"
+import Process from "Process"
+import String from "String"
+
+
+
+normalize :: String -> String
+export normalize = (input) => pipe(
+  Dict.get("HOME"),
+  map(String.replace("~", $, input)),
+  fromMaybe(input),
+)(Process.Env)
+
+// TODO: check behavior for non-OSX files
+tempdir :: String -> String
+export tempdir = (file) => pipe(
+  Dict.get("TMPDIR"),
+  fromMaybe("/private/var/tmp/"),
+  mappend(file),
+)(Process.Env)

@@ -7,21 +7,34 @@ import Jam from "@/Jam"
 
 
 main = () => {
-  jam = Jam.create("~/.jamfile-example")
-  IO.pTrace("JAM!", jam)
-
+  src = "~/.jamfile-example"
+  // LOAD A FILE
   pipe(
-    Jam.remember($, "save data!"),
-    IO.pTrace("remembering..."),
+    Jam.load,
     Wish.fulfill(
       pipe(
-        IO.pTrace("BAD"),
+        IO.pTrace("LOAD BAD"),
         noop,
       ),
       pipe(
-        IO.pTrace("GOOD"),
+        IO.pTrace("LOAD GOOD"),
         noop,
       ),
     ),
-  )(jam)
+  )(src)
+  // LOAD A FILE BUT ENSURE THERE'S AN INITIAL VALUE
+  pipe(
+    Jam.ensure($, "initial value"),
+    IO.pTrace("loaded?"),
+    Wish.fulfill(
+      pipe(
+        IO.pTrace("ENSURE BAD"),
+        noop,
+      ),
+      pipe(
+        IO.pTrace("ENSURE GOOD"),
+        noop,
+      ),
+    ),
+  )(src)
 }

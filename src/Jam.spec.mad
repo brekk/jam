@@ -1,0 +1,92 @@
+import { Error, assertEquals, test } from "Test"
+import Wish from "Wish"
+
+import FS from "@/FS"
+import {
+  Preserve,
+  create,
+  ensure,
+  isClean,
+  isDirty,
+  isEmpty,
+  load,
+  set,
+  setClean,
+  setDirty,
+  source,
+  update,
+  value,
+} from "@/Jam"
+import { asyncReport, report } from "@/test"
+
+
+
+CLEAN = Preserve(true, "src", "raw")
+DIRTY = Preserve(false, "src", "raw")
+
+report(isClean, "isClean", [#[CLEAN, true], #[DIRTY, false]])
+report(isDirty, "isDirty", [#[CLEAN, false], #[DIRTY, true]])
+report(source, "source", [#[DIRTY, "src"]])
+report(value, "value", [#[DIRTY, "raw"]])
+
+report(
+  create("~/whatever"),
+  "create",
+  [#["blah", Preserve(true, FS.normalize("~/whatever"), "blah")]],
+)
+
+report(
+  set("test value!"),
+  "set",
+  [#[Preserve(true, "./test-location", "yyy"), Preserve(false, "./test-location", "test value!")]],
+)
+
+report(
+  update((raw) => "hello " ++ raw),
+  "update",
+  [
+    #[
+      Preserve(true, "./test-location", "there"),
+      Preserve(false, "./test-location", "hello there"),
+    ],
+  ],
+)
+
+report(
+  setClean,
+  "setClean",
+  [#[Preserve(false, "./clean-me", "value"), Preserve(true, "./clean-me", "value")]],
+)
+
+report(
+  setDirty,
+  "setDirty",
+  [#[Preserve(true, "./me-dirty", "value"), Preserve(false, "./me-dirty", "value")]],
+)
+
+report(
+  isEmpty,
+  "isEmpty",
+  [
+    #[Preserve(true, "./some-place", ""), true],
+    #[Preserve(true, "./some-place", "not empty"), false],
+  ],
+)
+
+asyncReport(
+  pipe(
+    load,
+    Wish.mapRej((_) => Error("Broken!")),
+  ),
+  "load",
+  [#["./fixture-file", Preserve(true, "./fixture-file", "this is a fixture!\n")]],
+)
+
+asyncReport(
+  pipe(
+    ensure("./fixture-file"),
+    Wish.mapRej((_) => Error("Broken!")),
+  ),
+  "ensure",
+  [#["default value", Preserve(true, "./fixture-file", "this is a fixture!\n")]],
+)
