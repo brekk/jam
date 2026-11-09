@@ -1,0 +1,12 @@
+import type { Memory, Preserve } from "@/Jam"
+
+
+
+// export type Serializer a = Serializer(a -> String)
+// export type Deserializer a = Deserializer(String -> a)
+
+interface Serializable a {
+  deserialize :: String -> a
+
+  serialize :: a -> String
+}
